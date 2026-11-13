@@ -21,6 +21,22 @@ See L<CTLOG_STORE_new(3)>.
 
 This variable is considered a security-sensitive environment variable.
 
+=item B<DISABLE_UPKI>
+
+If set (to any value, including the empty string), disables the UPKI
+certificate verification callback.
+In builds that include the UPKI integration, when the UPKI OpenSSL shim
+library (F<libupki_openssl.so>) is available and the application has not
+set a verify callback using L<SSL_CTX_set_verify(3)> or
+L<SSL_set_verify(3)>, the shim's verification callback is used for TLS
+certificate verification and consults UPKI revocation data in addition
+to the normal OpenSSL checks.
+When B<DISABLE_UPKI> is set, the shim's callback is not installed and the
+default OpenSSL verification behavior is used instead.
+The variable is consulted once per process; changing it later has no effect.
+
+This variable is considered a security-sensitive environment variable.
+
 =item B<HOME>, B<SYSTEMROOT>, B<USERPROFILE>
 
 Path which L<RAND_file_name(3)> uses as a directory for the random seed file

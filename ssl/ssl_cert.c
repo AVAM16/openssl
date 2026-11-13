@@ -27,6 +27,7 @@
 #include "ssl_cert_table.h"
 #include "internal/thread_once.h"
 #include "internal/ssl_unwrap.h"
+#include <dlfcn.h>
 #ifndef OPENSSL_NO_POSIX_IO
 #include <sys/stat.h>
 #ifdef _WIN32
@@ -58,6 +59,20 @@ int SSL_get_ex_data_X509_STORE_CTX_idx(void)
     if (!RUN_ONCE(&ssl_x509_store_ctx_once, ssl_x509_store_ctx_init))
         return -1;
     return ssl_x509_store_ctx_idx;
+}
+
+static void *upki_openssl = NULL;
+static SSL_verify_cb upki_openssl_verify_callback = NULL;
+static CRYPTO_ONCE upki_openssl_once = CRYPTO_ONCE_STATIC_INIT;
+
+DEFINE_RUN_ONCE_STATIC(upki_openssl_init)
+{
+    upki_openssl = dlopen("/run/current-system/sw/lib/libupki_openssl.so", RTLD_LAZY);
+    if (upki_openssl != NULL && !ossl_safe_getenv("DISABLE_UPKI"))
+        upki_openssl_verify_callback =
+            (SSL_verify_cb) dlsym(upki_openssl,
+                    "upki_openssl_verify_callback");
+    return upki_openssl != NULL && upki_openssl_verify_callback != NULL;
 }
 
 CERT *ssl_cert_new(size_t ssl_pkey_num)
@@ -521,6 +536,8 @@ static int ssl_verify_internal(SSL_CONNECTION *s, STACK_OF(X509) *sk, EVP_PKEY *
 
     if (s->verify_callback)
         X509_STORE_CTX_set_verify_cb(ctx, s->verify_callback);
+    else if (RUN_ONCE(&upki_openssl_once, upki_openssl_init))
+        X509_STORE_CTX_set_verify_cb(ctx, upki_openssl_verify_callback);
 
     if (sctx->app_verify_callback != NULL) {
         i = sctx->app_verify_callback(ctx, sctx->app_verify_arg);
